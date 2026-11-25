@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Plan Terrain"><meta name="theme-color" content="#2f7d3a"><title>Plan de terrain agricole</title>
+<style>
+:root{--bg:#f6f7f4;--card:#fff;--tx:#1d2a1f;--mu:#6b786d;--bd:#d9ded6;--ac:#2f7d3a;--grid:#e3e8df;--land:#e9f3dc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151a16;--card:#1f2621;--tx:#e8eee9;--mu:#9aa89c;--bd:#33403a;--ac:#5cbf6a;--grid:#2a332d;--land:#26361f}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1{font-size:18px;margin:0}header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:10px 14px}
+.steps{display:flex;gap:6px}button,input,select,textarea{font:inherit;color:var(--tx)}
+button{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer}
+button.on,.steps button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+input,select,textarea{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:5px 7px;max-width:100%}
+main{display:grid;grid-template-columns:300px 1fr;gap:12px;padding:0 14px 14px}
+.panel,.box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.panel h3{margin:0 0 8px;font-size:14px}.row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;align-items:center}
+.mu{color:var(--mu);font-size:12px}.hide{display:none}
+#svg{width:100%;height:min(62vh,560px);background:var(--card);border:1px solid var(--bd);border-radius:10px;color:var(--tx);touch-action:none;display:block}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.chips button{display:flex;gap:6px;align-items:center;padding:4px 8px}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid var(--bd);padding:6px;text-align:left}th{font-size:12px;color:var(--mu)}
+tr.sel{background:color-mix(in srgb,var(--ac) 15%,transparent)}td svg{display:block}
+.wrap{overflow-x:auto}.sec button{margin:2px}
+@media(max-width:800px){main{grid-template-columns:1fr}main>div:nth-child(2){order:-1}#svg{height:55vh}button{min-height:44px}}
+@media print{.panel,header .steps,.chips,.noprint{display:none!important}main{display:block}body{background:#fff}}
+</style></head><body>
+<header><h1>ðŸŒ± Plan de terrain agricole</h1>
+<div class="steps"><button id="s1" onclick="go(1)">1 Â· Terrain</button><button id="s2" onclick="go(2)">2 Â· Secteurs</button><button id="s3" onclick="go(3)">3 Â· Ã‰quipement</button><button onclick="projUI()">ðŸ“ Projets</button><button onclick="share()">ðŸ“¤ Partager</button></div></header>
+<main>
+<div class="panel">
+<div id="p1"><h3>Tracer le terrain</h3>
+<div class="row"><button onclick="S.t=[];S.closed=false;S.tool='terrain';render()">âœï¸ Tracer Ã  la souris</button><button onclick="closeT()">Fermer</button><button onclick="reset()">Effacer</button></div>
+<p class="mu">Cliquez les sommets sur le plan (clic sur le 1er point pour fermer). Quadrillage en mÃ¨tres.</p>
+<b>Rectangle (sans coordonnÃ©es)</b>
+<div class="row"><input id="rw" type="number" value="100" style="width:80px"> Ã— <input id="rl" type="number" value="60" style="width:80px"> m <button onclick="rect()">CrÃ©er</button></div>
+<b>Avec coordonnÃ©es</b>
+<textarea id="co" rows="4" style="width:100%" placeholder="x,y (en m) â€” une ligne par point&#10;0,0&#10;120,0&#10;110,70&#10;0,60"></textarea>
+<div class="row"><label><input type="checkbox" id="gps"> GPS (latitude, longitude)</label><button onclick="coords()">Appliquer</button></div>
+<div id="info" class="mu"></div></div>
+<div id="p2" class="hide"><h3>Diviser en secteurs</h3>
+<div class="row"><label><input type="radio" name="dr" value="h" onchange="S.dir=this.value;cutsChange()"> Horizontal (bandes)</label><label><input type="radio" name="dr" value="v" checked onchange="S.dir=this.value;cutsChange()"> Vertical (colonnes)</label></div>
+<b>Secteurs Ã©gaux</b><div class="row"><input id="nn" type="number" min="1" max="30" value="4" style="width:70px"><button onclick="equal()">Diviser</button></div>
+<b>Secteurs libres</b><p class="mu">Cliquez sur le plan pour ajouter une ligne de coupe.</p>
+<div class="row"><button onclick="S.tool='cut';render()">âœ‚ï¸ Ajouter des coupes</button><button onclick="S.cuts=[];cutsChange()">Tout enlever</button></div>
+<div id="cuts" class="mu"></div></div>
+<div id="p3" class="hide"><h3>Travail par secteur</h3>
+<div class="sec" id="seclist"></div>
+<p class="mu">1. Cliquez un secteur Â· 2. Choisissez un matÃ©riel au-dessus du plan Â· 3. Cliquez (piÃ¨ces) ou glissez (tuyaux).</p>
+<div class="box" style="background:var(--bg);margin:8px 0"><b>âš¡ Rampes automatiques</b><div class="row">Espacement <input id="sp" type="number" value="2" step="0.5" min="0.3" style="width:70px"> m <select id="ad"><option value="h">Horizontales</option><option value="v">Verticales</option></select></div><button class="on" onclick="auto()" style="width:100%">Remplir le secteur actif</button></div>
+<div class="row"><button onclick="undo()">â†¶ Annuler</button><button id="bdel" onclick="S.tool='del';render()">ðŸ—‘ Supprimer</button></div>
+<h3 style="margin-top:12px">Copier le secteur actif</h3>
+<div id="cplist" class="row"></div>
+<label class="mu"><input type="checkbox" id="rep" checked> remplacer le contenu des secteurs cibles</label>
+<div class="row"><button onclick="copy(0)">Copier vers les cochÃ©s</button><button onclick="copy(1)">Vers tous</button></div></div>
+</div>
+<div><div id="hint" style="background:var(--ac);color:#fff;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-weight:600"></div><div class="chips" id="chips"></div><svg id="svg"></svg>
+<div class="box" style="margin-top:10px"><b>LÃ©gende et quantitÃ©s</b><div class="wrap"><table><thead><tr><th>Symbole</th><th>DÃ©signation</th><th id="thc">Secteur actif</th><th>Total</th><th class="noprint"></th></tr></thead><tbody id="leg"></tbody></table></div>
+<div class="row noprint" style="margin-top:10px"><b>Ajouter un matÃ©riel :</b><input id="mn" placeholder="Nom (ex. TÃ© PVC 50)"><select id="mk"><option value="p">Point (piÃ¨ce)</option><option value="l">Ligne (tuyau)</option></select><input id="mc" type="color" value="#e03131"><input id="ms" maxlength="2" placeholder="Lettre" style="width:60px"><button onclick="addMat()">Ajouter</button></div></div></div>
+</main>
+<script>
+const $=s=>document.querySelector(s),svg=$('#svg');
+let S={t:[[0,0],[100,0],[100,60],[0,60]],closed:true,dir:'v',cuts:[25,50,75],items:[],cur:0,tool:'ramp',draft:[],step:3,
+mats:[{id:'ramp',n:'Rampe goutte-Ã -goutte',k:'l',c:'#1a9850',w:2.6,d:'4 2'},{id:'pvc',n:'Conduite PVC',k:'l',c:'#1f6fd1',w:4.5},{id:'pe',n:'Tuyau PE (porte-rampe)',k:'l',c:'#333333',w:3.4},{id:'van',n:'Vanne',k:'p',c:'#d62828',s:'bow'},{id:'ele',n:'Ã‰lectrovanne',k:'p',c:'#8e44ad',s:'EV'},{id:'fil',n:'Filtre',k:'p',c:'#e67e22',s:'F'},{id:'pom',n:'Pompe',k:'p',c:'#0b7285',s:'P'},{id:'bas',n:'Bassin / rÃ©servoir',k:'p',c:'#1971c2',s:'B'},{id:'cpt',n:'Compteur',k:'p',c:'#555555',s:'C'}]};
+let vb={x:0,y:0,w:120,h:80},k=1;
+const PAL=['#bfe3a8','#a8d8f0','#fde4a0','#f5b8c8','#d2bff0','#a8ecd8','#fbc9a0','#d8e6a0'];const M=id=>S.mats.find(m=>m.id===id),ax=()=>S.dir==='v'?0:1;
+const bb=p=>({x0:Math.min(...p.map(q=>q[0])),y0:Math.min(...p.map(q=>q[1])),x1:Math.max(...p.map(q=>q[0])),y1:Math.max(...p.map(q=>q[1]))});
+const area=p=>Math.abs(p.reduce((s,a,i)=>{const b=p[(i+1)%p.length];return s+a[0]*b[1]-b[0]*a[1]},0))/2;
+const fa=a=>a>=10000?(a/10000).toFixed(2)+' ha':Math.round(a)+' mÂ²';
+const len=p=>p.reduce((s,a,i)=>i?s+Math.hypot(a[0]-p[i-1][0],a[1]-p[i-1][1]):0,0);
+function clip(p,r){const[x0,y0,x1,y1]=r;const E=[[q=>q[0]>=x0,(a,b)=>{const t=(x0-a[0])/(b[0]-a[0]);return[x0,a[1]+t*(b[1]-a[1])]}],[q=>q[0]<=x1,(a,b)=>{const t=(x1-a[0])/(b[0]-a[0]);return[x1,a[1]+t*(b[1]-a[1])]}],[q=>q[1]>=y0,(a,b)=>{const t=(y0-a[1])/(b[1]-a[1]);return[a[0]+t*(b[0]-a[0]),y0]}],[q=>q[1]<=y1,(a,b)=>{const t=(y1-a[1])/(b[1]-a[1]);return[a[0]+t*(b[0]-a[0]),y1]}]];
+for(const[ins,it]of E){const o=[];p.forEach((c,i)=>{const pr=p[(i+p.length-1)%p.length];if(ins(c)){if(!ins(pr))o.push(it(pr,c));o.push(c)}else if(ins(pr))o.push(it(pr,c))});p=o;if(!p.length)break}return p}
+function secs(){if(!S.closed)return[];const b=bb(S.t),a=ax(),lo=a?b.y0:b.x0,hi=a?b.y1:b.x1;
+const bd=[lo,...[...S.cuts].filter(c=>c>lo&&c<hi).sort((x,y)=>x-y),hi];
+return bd.slice(0,-1).map((s,i)=>{const e=bd[i+1],r=a?[b.x0,s,b.x1,e]:[s,b.y0,e,b.y1],poly=clip(S.t,r);
+const c=poly.length?[poly.reduce((u,q)=>u+q[0],0)/poly.length,poly.reduce((u,q)=>u+q[1],0)/poly.length]:[(r[0]+r[2])/2,(r[1]+r[3])/2];
+return{i,a:s,b:e,poly,area:poly.length?area(poly):0,c}})}
+const secAt=pt=>{const ss=secs();const i=ss.findIndex(s=>pt[ax()]>=s.a&&pt[ax()]<=s.b);return i<0?0:i};
+function sym(m,x,y,r){if(m.s==='bow')return`<circle cx="${x}" cy="${y}" r="${r*1.25}" fill="#fff" stroke="${m.c}" stroke-width="${r*.15}"/><polygon points="${x-r},${y-r*.7} ${x+r},${y+r*.7} ${x+r},${y-r*.7} ${x-r},${y+r*.7}" fill="${m.c}"/>`;
+const t=(m.s||m.n[0]).toUpperCase();return`<circle cx="${x}" cy="${y}" r="${r*1.25}" fill="#fff" stroke="${m.c}" stroke-width="${r*.2}"/><text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="${r*(t.length>1?1.05:1.4)}" font-weight="700" fill="${m.c}" font-family="system-ui">${t}</text>`}
+function mini(m){return m.k==='l'?`<svg width="44" height="14" viewBox="0 0 44 14"><line x1="2" y1="7" x2="42" y2="7" stroke="${m.c}" stroke-width="${m.w||2.5}" stroke-dasharray="${m.d||''}"/></svg>`:`<svg width="26" height="26" viewBox="-13 -13 26 26">${sym(m,0,0,8)}</svg>`}
+function P(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const q=p.matrixTransform(svg.getScreenCTM().inverse()),g=Math.max(.5,Math.round(vb.w/200*2)/2);return[Math.round(q.x/g)*g,Math.round(q.y/g)*g]}
+function render(){let b=S.closed?bb(S.t):bb([[0,0],[120,80],...S.t]);const w=Math.max(b.x1-b.x0,10),h=Math.max(b.y1-b.y0,10),m=Math.max(w,h)*.08;
+vb={x:b.x0-m,y:b.y0-m,w:w+2*m,h:h+2*m};k=Math.max(vb.w,vb.h*1.5)/900;svg.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+const G=[1,2,5,10,20,50,100,200].find(g=>vb.w/g<=40);let s='';
+for(let x=Math.ceil(vb.x/G)*G;x<vb.x+vb.w;x+=G)s+=`<line x1="${x}" y1="${vb.y}" x2="${x}" y2="${vb.y+vb.h}" stroke="var(--grid)" stroke-width="${k*.6}"/>`;
+for(let y=Math.ceil(vb.y/G)*G;y<vb.y+vb.h;y+=G)s+=`<line x1="${vb.x}" y1="${y}" x2="${vb.x+vb.w}" y2="${y}" stroke="var(--grid)" stroke-width="${k*.6}"/>`;
+s+=`<text x="${vb.x+k*6}" y="${vb.y+k*14}" font-size="${k*11}" fill="var(--mu)">Grille : ${G} m</text>`;
+const pl=p=>p.map(q=>q.join(',')).join(' ');
+if(S.t.length){if(S.closed){const ss=secs();ss.forEach(c=>{if(c.poly.length)s+=`<polygon points="${pl(c.poly)}" fill="${PAL[c.i%8]}" fill-opacity="${c.i===S.cur&&S.step>1?.95:.5}"/>`});
+S.cuts.forEach(c=>{const a=ax();s+=a?`<line x1="${vb.x}" x2="${vb.x+vb.w}" y1="${c}" y2="${c}"`:`<line y1="${vb.y}" y2="${vb.y+vb.h}" x1="${c}" x2="${c}"`;s+=` stroke="#c0392b" stroke-width="${k*1.2}" stroke-dasharray="${k*6} ${k*4}" opacity=".5"/>`});
+s+=`<polygon points="${pl(S.t)}" fill="none" stroke="#2f5d34" stroke-width="${k*2.5}" stroke-linejoin="round"/>`;
+if(S.step>1)ss.forEach(c=>{s+=`<text x="${c.c[0]}" y="${c.c[1]}" text-anchor="middle" font-size="${k*(c.i===S.cur?26:20)}" font-weight="700" fill="currentColor" opacity="${c.i===S.cur?.55:.3}" pointer-events="none">S${c.i+1}</text>`})}
+else s+=`<polyline points="${pl(S.t)}" fill="none" stroke="#2f5d34" stroke-width="${k*2.5}"/>`+S.t.map((q,i)=>`<circle cx="${q[0]}" cy="${q[1]}" r="${k*(i?4:6)}" fill="${i?'#2f5d34':'#e8590c'}"/>`).join('')}
+S.items.forEach((it,i)=>{const m=M(it.m);if(!m)return;const o=it.s===S.cur?1:.3;
+s+=m.k==='l'?`<g data-i="${i}" opacity="${o}"><polyline points="${pl(it.p)}" fill="none" stroke="${m.c}" stroke-width="${m.w*k}" stroke-dasharray="${m.d?m.d.split(' ').map(v=>v*k).join(' '):''}" stroke-linejoin="round"/><polyline points="${pl(it.p)}" fill="none" stroke="transparent" stroke-width="${k*10}"/></g>`:`<g data-i="${i}" opacity="${o}">${sym(m,it.p[0][0],it.p[0][1],11*k)}</g>`});
+if(S.draft.length){const m=M(S.tool);s+=`<polyline points="${pl(S.draft)}" fill="none" stroke="${m.c}" stroke-width="${m.w*k}" stroke-dasharray="${k*3}"/>`+S.draft.map(q=>`<circle cx="${q[0]}" cy="${q[1]}" r="${k*3}" fill="${m.c}"/>`).join('')}
+svg.innerHTML=s;svg.style.cursor=S.tool?'crosshair':'default';ui();try{localStorage.setItem('pt',JSON.stringify(S))}catch(e){}}
+function ui(){const ss=secs();$('h1').textContent='ðŸŒ± '+(S.name||'Plan de terrain agricole');const mm=M(S.tool);$('#hint').textContent=S.step===1?'ðŸ‘‰ Ã‰tape 1 : crÃ©ez le terrain (rectangle, coordonnÃ©es ou tracÃ©).':S.step===2?'ðŸ‘‰ Ã‰tape 2 : choisissez le nombre de secteurs, ou ajoutez des coupes libres.':S.tool==='del'?'ðŸ—‘ Cliquez sur un Ã©lÃ©ment pour le supprimer.':!mm?'ðŸ‘‰ Choisissez un matÃ©riel ci-dessus, ou cliquez sur un secteur pour le sÃ©lectionner.':mm.k==='l'?`âœï¸ ${mm.n} : glissez de A vers B (doigt ou souris). Ou utilisez âš¡ Rampes automatiques.`:`ðŸ“ ${mm.n} : cliquez Ã  lâ€™endroit oÃ¹ le poser.`;['1','2','3'].forEach(n=>{$('#s'+n).classList.toggle('on',S.step==n);$('#p'+n).classList.toggle('hide',S.step!=n)});
+$('#info').innerHTML=S.t.length?`${S.t.length} points${S.closed?` Â· Surface <b>${fa(area(S.t))}</b> Â· PÃ©rimÃ¨tre <b>${Math.round(len([...S.t,S.t[0]]))} m</b>`:' Â· non fermÃ©'}`:'';
+$('#cuts').innerHTML=S.cuts.length?[...S.cuts].sort((a,b)=>a-b).map(c=>`${S.dir==='v'?'x':'y'} = ${c} m <a href="#" onclick="S.cuts.splice(S.cuts.indexOf(${c}),1);cutsChange();return false">âœ•</a>`).join(' Â· '):'';
+$('#seclist').innerHTML=ss.map(c=>`<button class="${c.i===S.cur?'on':''}" style="border-left:10px solid ${PAL[c.i%8]}" onclick="S.cur=${c.i};S.draft=[];render()">S${c.i+1} Â· ${fa(c.area)}</button>`).join('');
+$('#cplist').innerHTML=ss.filter(c=>c.i!==S.cur).map(c=>`<label><input type="checkbox" class="cp" value="${c.i}"> S${c.i+1}</label>`).join('');
+$('#chips').innerHTML=S.step===3?S.mats.map(m=>`<button class="${S.tool===m.id?'on':''}" onclick="S.tool='${m.id}';S.draft=[];render()">${mini(m)}${m.n}</button>`).join('')+`<button class="${S.tool===null?'on':''}" onclick="S.tool=null;S.draft=[];render()">âœ‹ Choisir secteur</button>`:'';
+$('#bdel').classList.toggle('on',S.tool==='del');$('#thc').textContent='Secteur S'+(S.cur+1);
+const q=(m,sc)=>{const it=S.items.filter(i=>i.m===m.id&&(sc===null||i.s===sc));return m.k==='l'?Math.round(it.reduce((u,i)=>u+len(i.p),0))+' m':it.length+' u'};
+$('#leg').innerHTML=S.mats.map(m=>`<tr class="${S.tool===m.id?'sel':''}"><td>${mini(m)}</td><td>${m.n} <input type="color" value="${m.c}" onchange="M('${m.id}').c=this.value;render()" style="width:30px;height:24px;padding:0;border:0;vertical-align:middle" title="Changer la couleur"></td><td>${q(m,S.cur)}</td><td><b>${q(m,null)}</b></td><td class="noprint"><a href="#" onclick="delMat('${m.id}');return false" title="Retirer">âœ•</a></td></tr>`).join('')}
+function go(n){if(n>1&&!S.closed){alert("Tracez et fermez d'abord le terrain.");return}S.step=n;S.tool=n===1?'terrain':n===2?null:null;S.draft=[];render()}
+function closeT(){if(S.t.length>=3){S.closed=true;S.tool=null;render()}else alert('Il faut au moins 3 points.')}
+function reset(){S={...S,t:[],closed:false,cuts:[],items:[],cur:0,tool:'terrain',draft:[]};render()}
+function rect(){const w=+$('#rw').value,l=+$('#rl').value;if(w>0&&l>0){S.t=[[0,0],[w,0],[w,l],[0,l]];S.closed=true;S.cuts=[];S.items=[];S.tool=null;render()}}
+function coords(){const n=$('#co').value.split('\n').map(l=>l.split(/[;,\s]+/).filter(Boolean).map(Number)).filter(a=>a.length>=2&&a.every(v=>!isNaN(v)));
+if(n.length<3){alert('Au moins 3 points : une ligne "x,y" par point.');return}
+let p=n.map(a=>[a[0],a[1]]);if($('#gps').checked){const la=p[0][0],lo=p[0][1];p=p.map(([a,b])=>[Math.round((b-lo)*111320*Math.cos(la*Math.PI/180)*10)/10,Math.round(-(a-la)*110540*10)/10])}
+S.t=p;S.closed=true;S.cuts=[];S.items=[];S.tool=null;render()}
+function equal(){const n=Math.max(1,+$('#nn').value|0),b=bb(S.t),a=ax(),lo=a?b.y0:b.x0,hi=a?b.y1:b.x1;S.cuts=[];for(let i=1;i<n;i++)S.cuts.push(Math.round((lo+(hi-lo)*i/n)*10)/10);cutsChange()}
+function cutsChange(){const old=S.items.map(i=>i.p[0]);S.tool=null;const n=secs().length;S.items.forEach((it,i)=>it.s=secAt(old[i]));S.cur=Math.min(S.cur,n-1);render()}
+function finish(){const m=M(S.tool);if(m&&m.k==='l'&&S.draft.length>1)S.items.push({m:m.id,s:S.cur,p:S.draft});S.draft=[];render()}
+function undo(){if(S.draft.length)S.draft.pop();else S.items.pop();render()}
+function copy(all){const ss=secs(),c=ss[S.cur],tg=all?ss.map(s=>s.i).filter(i=>i!==S.cur):[...document.querySelectorAll('.cp:checked')].map(e=>+e.value);if(!tg.length){alert('Cochez au moins un secteur cible.');return}
+const src=S.items.filter(i=>i.s===S.cur),a=ax();if($('#rep').checked)S.items=S.items.filter(i=>!tg.includes(i.s));
+tg.forEach(j=>{const d=ss[j].a-c.a;src.forEach(it=>S.items.push({m:it.m,s:j,p:it.p.map(q=>a?[q[0],q[1]+d]:[q[0]+d,q[1]])}))});render()}
+function addMat(){const n=$('#mn').value.trim();if(!n)return;const l=$('#mk').value==='l';S.mats.push({id:'m'+Date.now(),n,k:l?'l':'p',c:$('#mc').value,w:2.4,s:$('#ms').value||n[0]});$('#mn').value='';$('#ms').value='';render()}
+function delMat(id){if(S.items.some(i=>i.m===id)&&!confirm('Ce matÃ©riel est utilisÃ© sur le plan. Le retirer aussi du plan ?'))return;S.items=S.items.filter(i=>i.m!==id);S.mats=S.mats.filter(m=>m.id!==id);if(S.tool===id)S.tool=null;render()}
+svg.addEventListener('click',e=>{const p=P(e);
+if(S.tool==='del'){const g=e.target.closest('[data-i]');if(g){S.items.splice(+g.dataset.i,1);render()}return}
+if(S.tool==='terrain'&&!S.closed){if(S.t.length>=3&&Math.hypot(p[0]-S.t[0][0],p[1]-S.t[0][1])<k*12){closeT();return}S.t.push(p);render();return}
+if(!S.closed)return;
+if(S.tool==='cut'){S.cuts.push(p[ax()]);cutsChange();S.tool='cut';render();return}
+const m=M(S.tool);
+if(!m){S.cur=secAt(p);S.draft=[];render();return}
+if(m.k==='p'){S.items.push({m:m.id,s:secAt(p),p:[p]});S.cur=secAt(p);render()}});
+let dr=null;
+svg.addEventListener('pointerdown',e=>{const m=M(S.tool);if(!S.closed||!m||m.k!=='l')return;dr=P(e);S.draft=[dr,dr];svg.setPointerCapture(e.pointerId);render()});
+svg.addEventListener('pointermove',e=>{if(!dr)return;S.draft=[dr,P(e)];render()});
+svg.addEventListener('pointerup',e=>{if(!dr)return;const q=P(e);if(Math.hypot(q[0]-dr[0],q[1]-dr[1])>0){S.items.push({m:S.tool,s:secAt(dr),p:[dr,q]});S.cur=secAt(dr)}dr=null;S.draft=[];render()});
+function auto(){if(!M('ramp'))return;const sp=+$('#sp').value||2,c=secs()[S.cur];if(!c||!c.poly.length)return;const hz=$('#ad').value==='h',Q=c.poly,b=bb(Q),lo=hz?b.y0:b.x0,hi=hz?b.y1:b.x1;
+S.items=S.items.filter(i=>!(i.s===S.cur&&i.m==='ramp'));
+for(let v=lo+sp/2;v<hi;v+=sp){const xs=[];Q.forEach((a,i)=>{const d=Q[(i+1)%Q.length],a1=hz?a[1]:a[0],d1=hz?d[1]:d[0];if((a1<=v&&d1>v)||(d1<=v&&a1>v)){const t=(v-a1)/(d1-a1);xs.push(hz?a[0]+t*(d[0]-a[0]):a[1]+t*(d[1]-a[1]))}});xs.sort((x,y)=>x-y);for(let j=0;j+1<xs.length;j+=2)S.items.push({m:'ramp',s:S.cur,p:hz?[[xs[j],v],[xs[j+1],v]]:[[v,xs[j]],[v,xs[j+1]]]})}
+render()}
+svg.addEventListener('dblclick',()=>{if(S.draft.length>1){S.draft.pop();finish()}});
+addEventListener('keydown',e=>{if(e.key==='Enter')finish();if(e.key==='Escape'){S.draft=[];render()}});
+
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const PK='pt_projects',pj=()=>{try{return JSON.parse(localStorage.getItem(PK))||{}}catch(e){return{}}};
+function projUI(){let d=document.getElementById('md');if(!d){d=document.createElement('div');d.id='md';d.style.cssText='position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:9;padding:16px';document.body.appendChild(d)}
+const P=pj(),n=Object.keys(P);
+d.innerHTML=`<div class="box" style="width:min(420px,100%);max-height:85vh;overflow:auto"><h3 style="margin:0 0 8px">ðŸ“ Mes projets</h3><div class="row"><input id="pn" placeholder="Nom du projet" value="${esc(S.name||'')}" style="flex:1"><button class="on" onclick="saveP()">Enregistrer</button></div>${n.length?n.map(k=>`<div class="row" style="justify-content:space-between"><b>${esc(k)}</b><span><button onclick="openP('${encodeURIComponent(k)}')">Ouvrir</button> <button onclick="delP('${encodeURIComponent(k)}')">âœ•</button></span></div>`).join(''):'<p class="mu">Aucun projet enregistrÃ©.</p>'}<div class="row"><button onclick="newP()">âž• Nouveau projet</button><button onclick="md.remove()">Fermer</button></div></div>`}
+function saveP(){const n=$('#pn').value.trim();if(!n)return;S.name=n;const P=pj();P[n]=JSON.parse(JSON.stringify(S));try{localStorage.setItem(PK,JSON.stringify(P))}catch(e){alert('Sauvegarde impossible')}render();projUI()}
+function openP(k){const P=pj();S=P[decodeURIComponent(k)];S.draft=[];md.remove();render()}
+function delP(k){k=decodeURIComponent(k);if(!confirm('Supprimer Â« '+k+' Â» ?'))return;const P=pj();delete P[k];localStorage.setItem(PK,JSON.stringify(P));projUI()}
+function newP(){if(!confirm('Commencer un nouveau projet ? (pensez Ã  enregistrer le prÃ©cÃ©dent)'))return;S={...S,name:'',t:[],closed:false,cuts:[],items:[],cur:0,tool:'terrain',draft:[],step:1};md.remove();render()}
+function exportSvg(){const W=1000,mh=Math.round(W*vb.h/vb.w);
+const inner=svg.innerHTML.replace(/var\(--grid\)/g,'#e3e8df').replace(/var\(--mu\)/g,'#6b786d').replace(/currentColor/g,'#1d2a1f').replace(/(<g data-i="\d+") opacity="0\.3"/g,'$1 opacity="1"');
+let leg='',y=mh+100;
+S.mats.filter(m=>S.items.some(i=>i.m===m.id)).forEach(m=>{const it=S.items.filter(i=>i.m===m.id),t=m.k==='l'?Math.round(it.reduce((u,i)=>u+len(i.p),0))+' m':it.length+' u';
+leg+=`<g transform="translate(40,${y})">${m.k==='l'?`<line x1="0" y1="0" x2="50" y2="0" stroke="${m.c}" stroke-width="${m.w+1}" stroke-dasharray="${m.d||''}"/>`:sym(m,25,0,11)}<text x="80" y="7" font-size="20" fill="#1d2a1f">${esc(m.n)}</text><text x="${W-60}" y="7" font-size="20" text-anchor="end" font-weight="700" fill="#1d2a1f">${t}</text></g>`;y+=38});
+const H=y+10;return{W,H,s:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#fff"/><text x="40" y="38" font-size="26" font-weight="700" fill="#1d2a1f" font-family="system-ui">${esc(S.name||'Plan de terrain')}</text><svg x="0" y="55" width="${W}" height="${mh}" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}">${inner}</svg><text x="40" y="${mh+85}" font-size="18" font-weight="700" fill="#6b786d" font-family="system-ui">LÃ‰GENDE Â· quantitÃ©s totales</text>${leg}</svg>`}}
+async function share(){try{const{s,W,H}=exportSvg(),img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s);await new Promise((r,j)=>{img.onload=r;img.onerror=j});
+const c=document.createElement('canvas');c.width=W*2;c.height=H*2;const x=c.getContext('2d');x.scale(2,2);x.drawImage(img,0,0);const url=c.toDataURL('image/png'),C=window.Capacitor&&Capacitor.Plugins;
+if(C&&C.Filesystem&&C.Share){const f=await C.Filesystem.writeFile({path:'plan-terrain.png',data:url.split(',')[1],directory:'CACHE'});await C.Share.share({title:'Plan de terrain',files:[f.uri]})}
+else if(navigator.canShare){const b=await (await fetch(url)).blob();await navigator.share({files:[new File([b],'plan-terrain.png',{type:'image/png'})]})}
+else{const a=document.createElement('a');a.href=url;a.download='plan-terrain.png';a.click()}}catch(e){if(!/cancel|abort/i.test(e&&e.message||''))alert('Partage impossible : '+e)}}
+try{const d=JSON.parse(localStorage.getItem('pt'));if(d&&d.t&&d.mats)S=d}catch(e){}
+render();
+</script></body></html>
